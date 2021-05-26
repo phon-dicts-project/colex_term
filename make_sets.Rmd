@@ -1,0 +1,82 @@
+---
+title: 'Colexifications Term Paper'
+output: html_notebook
+---
+
+```{r, message=FALSE}
+library(tidyverse)
+library(igraph)
+```
+
+```{r, message=FALSE}
+raw_data <- read_csv('https://raw.githubusercontent.com/phon-dicts-project/comparative_andic_dictionary_database/master/andic_dicts.csv')
+```
+
+```{r}
+keep_cols <- c('meaning_ru', 'lemma', 'glottocode', 'reference')
+keep_langs <- c('andi1255', 'tind1238', 'ghod1238', 'bagv1239', 'kara1474', 'akhv1239')
+keep_data <- raw_data[keep_cols]
+keep_data <- keep_data[keep_data$glottocode %in% keep_langs, ]
+```
+
+```{r}
+final_data <- keep_data[!is.na(keep_data$lemma), ]
+final_data <- final_data[!is.na(final_data$meaning_ru), ]
+final_data$reference <- recode(final_data$reference, 
+                                'Saidova 2006' = 'gdosaidova2006', 'Magomedova 2004' = 'kvamagomedova2004', 
+                                'Magomedova, Khalidov 2001' = 'kptmagomedovakhalidova2001', 
+                                'Magomedova, Abdulayeva 2007' = 'akvmagomedovaabdulayeva2007',
+                                'Salimov 2010' = 'anisalimov2010', 'Magomedova 2003' = 'tinmagomedova2003')
+```
+
+```{r}
+for (lang in keep_langs)
+{
+  final_data_lang <- rowid_to_column(final_data[final_data$glottocode == lang, ], 'ID')
+  write_csv(final_data_lang, sprintf("final_data_%s.csv", lang), na = 'NA')
+}
+```
+
+```{r, message=FALSE}
+lang_maps <- data.frame()
+for (lang in keep_langs)
+{
+  buf <- read_csv(sprintf('final_data_%s_mapped.csv', lang))
+  lang_maps <- rbind(lang_maps, buf)
+}
+```
+
+```{r}
+lang_maps <- lang_maps[order(lang_maps$meaning_ru), ]
+write_csv(lang_maps, 'final_mapped.csv', na = 'NA')
+```
+
+
+```{r, message=FALSE}
+final_checked <- read_csv('final_checked.csv')
+final_filtered <- final_checked[is.na(final_checked$status), ]
+keep_fin_cols <- c('lemma', 'glosses', 'glottocode', 'reference')
+final_filtered <- final_filtered[keep_fin_cols]
+final_filtered <- final_filtered[order(final_filtered$lemma), ]
+final_filtered <- rowid_to_column(final_filtered, 'ID')
+write_csv(final_filtered, 'final_filtered.csv', na = 'NA')
+```
+
+```{r}
+adj <- crossprod(table(final_filtered[c('lemma', 'glosses')]))
+g <- graph.adjacency(adj, weighted=TRUE, mode ='undirected')
+g <- simplify(g)
+V(g)$label <- V(g)$name
+V(g)$degree <- degree(g)
+```
+
+```{r}
+edges <- get.data.frame(g)
+edges <- edges[order(-edges$weight), ]
+head(edges, 20)
+```
+
+```{r}
+imc <- cluster_infomap(g)
+head(imc, 10)
+```
